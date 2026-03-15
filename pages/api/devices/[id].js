@@ -50,7 +50,6 @@ async function handler(req, res) {
   }
 
   if (req.method === 'PATCH') {
-    // Support cannot modify devices
     if (role === 'support') {
       return res.status(403).json({ error: 'Support users cannot modify devices' })
     }
@@ -84,7 +83,6 @@ async function handler(req, res) {
   }
 
   if (req.method === 'DELETE') {
-    // Support cannot delete devices
     if (role === 'support') {
       return res.status(403).json({ error: 'Support users cannot delete devices' })
     }

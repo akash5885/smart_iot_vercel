@@ -149,6 +149,14 @@ export default function CustomerDashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('My Devices')
+
+  // Sync tab with URL query param
+  useEffect(() => {
+    if (router.query.tab) {
+      const tab = decodeURIComponent(router.query.tab)
+      if (TABS.includes(tab)) setActiveTab(tab)
+    }
+  }, [router.query.tab])
   const [devices, setDevices] = useState([])
   const [selectedDevice, setSelectedDevice] = useState(null)
   const [showAddModal, setShowAddModal] = useState(false)
@@ -197,7 +205,7 @@ export default function CustomerDashboard() {
   }, [])
 
   const handleControl = async (deviceId, command, params) => {
-    const res = await fetch(`/api/devices/${deviceId}/control`, {
+    const res = await fetch(`/api/device-control/${deviceId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command, params }),
@@ -306,7 +314,7 @@ export default function CustomerDashboard() {
           {TABS.map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => { setActiveTab(tab); router.replace(`/dashboard/customer?tab=${encodeURIComponent(tab)}`, undefined, { shallow: true }) }}
               className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab
                   ? 'bg-blue-600 text-white shadow'

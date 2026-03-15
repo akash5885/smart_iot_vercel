@@ -73,7 +73,6 @@ async function handler(req, res) {
     }
 
     try {
-      // Prevent deleting self
       if (targetId === req.user.id) {
         return res.status(400).json({ error: 'Cannot delete your own account' })
       }

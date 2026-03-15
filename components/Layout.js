@@ -38,20 +38,19 @@ const ROLE_CONFIG = {
 
 const NAV_ITEMS = {
   admin: [
-    { href: '/dashboard/admin', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/dashboard/admin#customers', label: 'Customers', icon: Users },
-    { href: '/dashboard/admin#devices', label: 'All Devices', icon: Cpu },
-    { href: '/dashboard/admin#ai', label: 'AI Assistant', icon: Bot },
+    { href: '/dashboard/admin?tab=Overview', label: 'Dashboard', icon: LayoutDashboard, tab: 'Overview' },
+    { href: '/dashboard/admin?tab=Customers', label: 'Customers', icon: Users, tab: 'Customers' },
+    { href: '/dashboard/admin?tab=All+Devices', label: 'All Devices', icon: Cpu, tab: 'All Devices' },
+    { href: '/dashboard/admin?tab=AI+Assistant', label: 'AI Assistant', icon: Bot, tab: 'AI Assistant' },
   ],
   support: [
-    { href: '/dashboard/support', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/dashboard/support#devices', label: 'Customer Devices', icon: Cpu },
-    { href: '/dashboard/support#ai', label: 'AI Assistant', icon: Bot },
+    { href: '/dashboard/support?tab=Overview', label: 'Dashboard', icon: LayoutDashboard, tab: 'Overview' },
+    { href: '/dashboard/support?tab=Customer+Devices', label: 'Customer Devices', icon: Cpu, tab: 'Customer Devices' },
+    { href: '/dashboard/support?tab=AI+Assistant', label: 'AI Assistant', icon: Bot, tab: 'AI Assistant' },
   ],
   customer: [
-    { href: '/dashboard/customer', label: 'Dashboard', icon: LayoutDashboard },
-    { href: '/dashboard/customer#devices', label: 'My Devices', icon: Cpu },
-    { href: '/dashboard/customer#ai', label: 'AI Assistant', icon: Bot },
+    { href: '/dashboard/customer?tab=My+Devices', label: 'My Devices', icon: LayoutDashboard, tab: 'My Devices' },
+    { href: '/dashboard/customer?tab=AI+Assistant', label: 'AI Assistant', icon: Bot, tab: 'AI Assistant' },
   ],
 }
 
@@ -95,7 +94,7 @@ export default function Layout({ children, user }) {
         <p className="text-gray-600 text-xs font-medium uppercase tracking-wider px-3 mb-2">Navigation</p>
         {navItems.map((item) => {
           const Icon = item.icon
-          const isActive = router.pathname === item.href.split('#')[0]
+          const isActive = router.query.tab === item.tab || (!router.query.tab && item.tab === 'Overview') || (!router.query.tab && item.tab === 'My Devices')
 
           return (
             <Link

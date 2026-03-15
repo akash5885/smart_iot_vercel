@@ -147,6 +147,14 @@ export default function AdminDashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('Overview')
+
+  // Sync tab with URL query param
+  useEffect(() => {
+    if (router.query.tab) {
+      const tab = decodeURIComponent(router.query.tab)
+      if (TABS.includes(tab)) setActiveTab(tab)
+    }
+  }, [router.query.tab])
   const [users, setUsers] = useState([])
   const [devices, setDevices] = useState([])
   const [stats, setStats] = useState({ customers: 0, support: 0, totalDevices: 0, online: 0, offline: 0, error: 0 })
@@ -209,7 +217,7 @@ export default function AdminDashboard() {
   }, [])
 
   const handleControl = async (deviceId, command, params) => {
-    const res = await fetch(`/api/devices/${deviceId}/control`, {
+    const res = await fetch(`/api/device-control/${deviceId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ command, params }),
@@ -326,7 +334,7 @@ export default function AdminDashboard() {
           {TABS.map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => { setActiveTab(tab); router.replace(`/dashboard/admin?tab=${encodeURIComponent(tab)}`, undefined, { shallow: true }) }}
               className={`flex-shrink-0 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab
                   ? 'bg-blue-600 text-white shadow'

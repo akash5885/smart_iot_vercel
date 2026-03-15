@@ -109,7 +109,7 @@ export default function DeviceControlPanel({ device, canControl, onControl, onCl
     setLoading(true)
     try {
       const [readingsRes, deviceRes] = await Promise.all([
-        fetch(`/api/devices/${device.id}/readings`),
+        fetch(`/api/device-readings/${device.id}`),
         fetch(`/api/devices/${device.id}`),
       ])
 

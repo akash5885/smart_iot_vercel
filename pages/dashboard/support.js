@@ -24,6 +24,14 @@ export default function SupportDashboard() {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState('Overview')
+
+  // Sync tab with URL query param
+  useEffect(() => {
+    if (router.query.tab) {
+      const tab = decodeURIComponent(router.query.tab)
+      if (TABS.includes(tab)) setActiveTab(tab)
+    }
+  }, [router.query.tab])
   const [devices, setDevices] = useState([])
   const [customers, setCustomers] = useState([])
   const [selectedDevice, setSelectedDevice] = useState(null)
@@ -139,7 +147,7 @@ export default function SupportDashboard() {
           {TABS.map((tab) => (
             <button
               key={tab}
-              onClick={() => setActiveTab(tab)}
+              onClick={() => { setActiveTab(tab); router.replace(`/dashboard/support?tab=${encodeURIComponent(tab)}`, undefined, { shallow: true }) }}
               className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
                 activeTab === tab
                   ? 'bg-blue-600 text-white shadow'
