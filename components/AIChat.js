@@ -1,108 +1,178 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Bot, User, Loader2, Zap } from 'lucide-react'
+import { Bot, User, Send, Loader2, Zap, Wrench, ChevronDown, ChevronUp } from 'lucide-react'
 
 const QUICK_QUESTIONS = {
   admin: [
-    'How many devices are currently online?',
-    'Show me a summary of all customer accounts',
-    'What are the most common device types?',
-    'Are there any devices with errors?',
+    'How many devices are online right now?',
+    'Show me all customer devices',
+    'List all support users',
+    'Which devices are offline?',
   ],
   support: [
-    'Which customers have offline devices?',
-    'What are common troubleshooting steps?',
-    'How do I help a customer reset their device?',
-    'What does each device type do?',
+    'Show me all customer devices',
+    'Which devices are currently offline?',
+    'How many customers are registered?',
+    'Show device readings for all thermostats',
   ],
   customer: [
-    'How do I add a new device?',
-    'Why is my device showing offline?',
-    'How can I save energy with my smart devices?',
-    'What does the thermostat target temperature mean?',
+    'What devices do I have?',
+    'Turn on all my lights',
+    'What is the temperature in my home?',
+    'Lock my front door',
   ],
 }
 
-const ROLE_LABELS = {
-  admin: { label: 'Admin AI', color: 'text-purple-400 bg-purple-500/10' },
-  support: { label: 'Support AI', color: 'text-blue-400 bg-blue-500/10' },
-  customer: { label: 'Personal AI', color: 'text-green-400 bg-green-500/10' },
+function ToolCallBadge({ toolCallLog }) {
+  const [expanded, setExpanded] = useState(false)
+  if (!toolCallLog || toolCallLog.length === 0) return null
+
+  const toolNames = {
+    get_devices: 'Fetched devices',
+    get_device_readings: 'Fetched readings',
+    control_device: 'Controlled device',
+    get_users: 'Fetched users',
+    create_user: 'Created user',
+  }
+
+  return (
+    <div className="mt-2">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-400 transition-colors"
+      >
+        <Wrench size={11} />
+        <span>{toolCallLog.length} action{toolCallLog.length > 1 ? 's' : ''} taken</span>
+        {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+      </button>
+      {expanded && (
+        <div className="mt-1.5 space-y-1">
+          {toolCallLog.map((call, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs bg-gray-800/60 rounded px-2 py-1">
+              <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
+              <span className="text-blue-400 font-medium">{toolNames[call.tool] || call.tool}</span>
+              {call.args && Object.keys(call.args).length > 0 && (
+                <span className="text-gray-500 truncate">
+                  {Object.entries(call.args)
+                    .filter(([k]) => k !== 'params')
+                    .map(([k, v]) => `${k}: ${typeof v === 'string' ? v.slice(0, 20) : v}`)
+                    .join(', ')}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Message({ msg }) {
+  const isUser = msg.role === 'user'
+
+  return (
+    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
+      <div className={`w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center ${
+        isUser ? 'bg-blue-600' : 'bg-gray-700'
+      }`}>
+        {isUser ? <User size={15} className="text-white" /> : <Bot size={15} className="text-blue-400" />}
+      </div>
+      <div className={`max-w-[80%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+        <div className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+          isUser
+            ? 'bg-blue-600 text-white rounded-tr-sm'
+            : 'bg-gray-800 text-gray-100 rounded-tl-sm'
+        }`}>
+          <p className="whitespace-pre-wrap">{msg.content}</p>
+        </div>
+        {msg.toolCallLog && <ToolCallBadge toolCallLog={msg.toolCallLog} />}
+        <span className="text-xs text-gray-600 mt-1 px-1">
+          {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function TypingIndicator() {
+  return (
+    <div className="flex gap-3">
+      <div className="w-8 h-8 rounded-full bg-gray-700 flex-shrink-0 flex items-center justify-center">
+        <Bot size={15} className="text-blue-400" />
+      </div>
+      <div className="bg-gray-800 rounded-2xl rounded-tl-sm px-4 py-3 flex items-center gap-1">
+        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+        <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      </div>
+    </div>
+  )
 }
 
 export default function AIChat({ userRole }) {
-  const [messages, setMessages] = useState([])
+  const [messages, setMessages] = useState([
+    {
+      role: 'assistant',
+      content: `Hi! I'm your IoT assistant. I can fetch real-time device data and ${
+        userRole === 'support' ? 'help you monitor devices (view only)' : 'control your devices'
+      }. What can I help you with?`,
+      timestamp: Date.now(),
+      toolCallLog: [],
+    },
+  ])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const messagesEndRef = useRef(null)
+  const [error, setError] = useState('')
+  const bottomRef = useRef(null)
   const inputRef = useRef(null)
 
-  const roleConfig = ROLE_LABELS[userRole] || ROLE_LABELS.customer
-  const quickQuestions = QUICK_QUESTIONS[userRole] || QUICK_QUESTIONS.customer
-
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
 
-  useEffect(() => {
-    // Welcome message
-    if (messages.length === 0) {
-      setMessages([
-        {
-          role: 'assistant',
-          content: `Hello! I'm your ${roleConfig.label}. I can help you manage your IoT devices and answer questions about the platform. What would you like to know?`,
-          timestamp: new Date().toISOString(),
-        },
-      ])
-    }
-  }, [])
+  const sendMessage = async (text) => {
+    const trimmed = (text || input).trim()
+    if (!trimmed || loading) return
 
-  const sendMessage = async (messageText = null) => {
-    const text = messageText || input.trim()
-    if (!text || loading) return
-
-    const userMessage = {
-      role: 'user',
-      content: text,
-      timestamp: new Date().toISOString(),
-    }
-
-    setMessages((prev) => [...prev, userMessage])
     setInput('')
+    setError('')
+
+    const userMsg = { role: 'user', content: trimmed, timestamp: Date.now() }
+    setMessages((prev) => [...prev, userMsg])
     setLoading(true)
-    setError(null)
 
     try {
-      // Build conversation history (exclude welcome message, last 10 msgs)
-      const conversationHistory = messages
+      // Build conversation history for API (exclude toolCallLog, timestamp)
+      const history = messages
         .filter((m) => m.role !== 'system')
-        .slice(-10)
         .map((m) => ({ role: m.role, content: m.content }))
 
       const res = await fetch('/api/ai/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: text,
-          conversationHistory,
+          message: trimmed,
+          conversationHistory: history,
         }),
       })
 
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to get response')
+        setError(data.error || 'Failed to get response')
+        return
       }
 
-      const aiMessage = {
-        role: 'assistant',
-        content: data.response,
-        timestamp: new Date().toISOString(),
-      }
-
-      setMessages((prev) => [...prev, aiMessage])
-    } catch (err) {
-      setError(err.message || 'Failed to get AI response. Please try again.')
-      console.error('AI chat error:', err)
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: data.response,
+          timestamp: Date.now(),
+          toolCallLog: data.toolCallLog || [],
+        },
+      ])
+    } catch {
+      setError('Network error. Please check your connection.')
     } finally {
       setLoading(false)
       inputRef.current?.focus()
@@ -116,43 +186,54 @@ export default function AIChat({ userRole }) {
     }
   }
 
-  const formatTime = (iso) => {
-    if (!iso) return ''
-    return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  }
+  const quickQuestions = QUICK_QUESTIONS[userRole] || QUICK_QUESTIONS.customer
 
   return (
-    <div className="flex flex-col h-[600px] card p-0 overflow-hidden">
+    <div className="flex flex-col bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden" style={{ height: '600px' }}>
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-800 bg-gray-900/50">
-        <div className="p-2 rounded-lg bg-blue-500/10 text-blue-400">
-          <Bot size={18} />
+      <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-800 bg-gray-900">
+        <div className="w-9 h-9 bg-blue-600/20 rounded-xl flex items-center justify-center">
+          <Bot size={18} className="text-blue-400" />
         </div>
         <div>
-          <h3 className="font-semibold text-white text-sm">AI Assistant</h3>
-          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${roleConfig.color}`}>
-            {roleConfig.label}
-          </span>
+          <h3 className="font-semibold text-white text-sm">IoT AI Agent</h3>
+          <p className="text-xs text-gray-500 flex items-center gap-1">
+            <Zap size={10} className="text-green-400" />
+            Powered by Groq · llama-3.3-70b-versatile · {userRole} access
+          </p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-xs text-gray-500">Powered by Llama 3.3</span>
+          <span className="text-xs text-green-400">Live</span>
         </div>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {messages.map((msg, i) => (
+          <Message key={i} msg={msg} />
+        ))}
+        {loading && <TypingIndicator />}
+        {error && (
+          <div className="bg-red-900/20 border border-red-800 text-red-400 text-sm rounded-xl px-4 py-3">
+            {error}
+          </div>
+        )}
+        <div ref={bottomRef} />
       </div>
 
       {/* Quick Questions */}
       {messages.length <= 1 && (
-        <div className="px-4 py-3 border-b border-gray-800 bg-gray-900/30">
-          <p className="text-xs text-gray-500 mb-2">Quick questions:</p>
+        <div className="px-5 pb-3">
+          <p className="text-xs text-gray-600 mb-2">Quick questions:</p>
           <div className="flex flex-wrap gap-2">
-            {quickQuestions.map((q, i) => (
+            {quickQuestions.map((q) => (
               <button
-                key={i}
+                key={q}
                 onClick={() => sendMessage(q)}
                 disabled={loading}
-                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-full transition-colors border border-gray-700 hover:border-gray-600 flex items-center gap-1"
+                className="text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-1.5 rounded-full border border-gray-700 transition-colors disabled:opacity-50"
               >
-                <Zap size={10} className="text-yellow-400" />
                 {q}
               </button>
             ))}
@@ -160,86 +241,28 @@ export default function AIChat({ userRole }) {
         </div>
       )}
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, i) => (
-          <div
-            key={i}
-            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
-          >
-            {/* Avatar */}
-            <div
-              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                msg.role === 'user'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-800 text-blue-400 border border-gray-700'
-              }`}
-            >
-              {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
-            </div>
-
-            {/* Bubble */}
-            <div className={`max-w-[75%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-              <div
-                className={`px-4 py-3 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-tr-sm'
-                    : 'bg-gray-800 text-gray-100 border border-gray-700 rounded-tl-sm'
-                }`}
-              >
-                {msg.content}
-              </div>
-              <span className="text-gray-600 text-xs mt-1 px-1">{formatTime(msg.timestamp)}</span>
-            </div>
-          </div>
-        ))}
-
-        {/* Loading indicator */}
-        {loading && (
-          <div className="flex gap-3 flex-row">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-gray-800 text-blue-400 border border-gray-700">
-              <Bot size={14} />
-            </div>
-            <div className="bg-gray-800 border border-gray-700 px-4 py-3 rounded-2xl rounded-tl-sm flex items-center gap-2">
-              <Loader2 size={14} className="animate-spin text-blue-400" />
-              <span className="text-gray-400 text-sm">Thinking...</span>
-            </div>
-          </div>
-        )}
-
-        {/* Error message */}
-        {error && (
-          <div className="bg-red-900/20 border border-red-800 text-red-400 text-sm px-4 py-2 rounded-lg">
-            {error}
-          </div>
-        )}
-
-        <div ref={messagesEndRef} />
-      </div>
-
       {/* Input */}
-      <div className="px-4 py-3 border-t border-gray-800 bg-gray-900/30">
+      <div className="px-5 py-4 border-t border-gray-800">
         <div className="flex gap-2">
           <textarea
             ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask about your IoT devices..."
+            placeholder={`Ask me anything about ${userRole === 'customer' ? 'your devices' : 'the IoT platform'}...`}
             rows={1}
-            disabled={loading}
-            className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 resize-none placeholder-gray-500 disabled:opacity-50"
-            style={{ maxHeight: '80px', overflowY: 'auto' }}
+            className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500 resize-none placeholder-gray-600"
+            style={{ minHeight: '42px', maxHeight: '120px' }}
           />
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
-            className="btn-primary px-3 py-2.5 rounded-xl flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={loading || !input.trim()}
+            className="bg-blue-600 hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-xl px-4 py-2.5 transition-colors flex items-center gap-2 text-sm font-medium"
           >
-            <Send size={16} />
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
           </button>
         </div>
-        <p className="text-xs text-gray-600 mt-1.5 px-1">Press Enter to send, Shift+Enter for new line</p>
+        <p className="text-xs text-gray-600 mt-2">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   )
